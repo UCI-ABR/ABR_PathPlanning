@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/layoutPreview"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent" >
+
+    <SurfaceView
+	    android:id="@+id/preview"
+	    android:layout_width="match_parent"
+	    android:layout_height="match_parent" />
+
+	<Button
+		android:id="@+id/btnGrid"
+		android:layout_width="@dimen/command_button_size"
+		android:layout_height="@dimen/command_button_size"
+		android:layout_margin="@dimen/command_button_margin"
+		android:background="@drawable/button_grid_off"
+		android:layout_centerHorizontal="true"
+		android:layout_alignParentRight="true"/>
+
+    <Button
+        android:id="@+id/btnAuto"
+        android:layout_width="@dimen/command_button_size"
+        android:layout_height="@dimen/command_button_size"
+		android:background="@drawable/button_auto"
+        android:layout_alignParentRight="true"
+		android:layout_marginLeft="@dimen/command_button_margin"
+		android:layout_marginRight="@dimen/command_button_margin"
+		android:layout_marginBottom="@dimen/command_button_margin"
+		android:layout_below="@+id/btnGrid" />
+
+    <LinearLayout
+        android:id="@+id/leftll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:orientation="vertical"
+		android:layout_alignParentBottom="true"
+		android:layout_alignParentStart="true">
+		<TextView
+			android:id="@+id/distanceText"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textColor = "#FFF"
+			android:paddingLeft="50dp"
+			android:text="@string/sonar2" />
+
+		<TextView
+			android:id="@+id/bearingText"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textColor = "#FFF"
+			android:paddingLeft="200dp"
+			android:text="@string/sonar2" />
+
+		<TextView
+			android:id="@+id/headingText"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textColor = "#FFF"
+			android:paddingLeft="350dp"
+			android:text="@string/sonar2" />
+        <TextView
+            android:id="@+id/txtIP"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0.0.0.0"
+            android:textColor="#ca2559"
+            android:textSize="@dimen/data_text_size" />
+
+	    <TextView
+	        android:id="@+id/txtSpeed"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="Speed 0"
+	        android:textColor="#ca2559"
+	        android:textSize="@dimen/data_text_size" />
+
+        <ImageView
+            android:id="@+id/imagePreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+	</LinearLayout>
+
+</RelativeLayout>
+
+
+
+
+
+            
