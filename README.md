@@ -1,3 +1,3 @@
-ABR_Template
+ABR_PathPlanning
 ==============
-Template app for accessing different features of ABR robot control. Uncomment sections as needed.
+App for using spike wave propagation for path planning.
