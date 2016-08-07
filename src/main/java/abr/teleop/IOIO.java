@@ -5,6 +5,7 @@ import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.hardware.Camera;
+import android.hardware.GeomagneticField;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -40,8 +41,6 @@ import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
-import org.opencv.android.OpenCVLoader;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -58,20 +57,15 @@ import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
 
-public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallback, SensorEventListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class IOIO extends IOIOActivity implements Callback, SensorEventListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     static final int DEFAULT_PWM = 1500, MAX_PWM = 2000, MIN_PWM = 1000;
     private static final String TAG_IOIO = "CameraRobot-IOIO";
     private static final String TAG_CAMERA = "CameraRobot-Camera";
 
-    static {
-        if (!OpenCVLoader.initDebug()) {
-            // Handle initialization error
-        }
-    }
-
+    //navigation variables
     public float heading = 0;
-    public float bearing;
+    public float bearing = 0;
     //grid variables
     public boolean gridMode = true;
     public boolean autoMode = false;
@@ -109,6 +103,7 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
     PixelGridView pixelGrid;
     int[][] costs;
     double[][] map;
+    double [][] orig_map;
     ArrayList<Location> waypoints;
     Location[][] gridLocations;
     int currRow;
@@ -125,6 +120,12 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
     //variables for compass
     private SensorManager mSensorManager;
     private Sensor mCompass, mAccelerometer, mGeomagnetic, mGravity, mGyroscope;
+    //variables passed through intent
+    int startX;
+    int startY;
+    int endX;
+    int endY;
+    String mapFilename;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -148,6 +149,13 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
 
         om = new OrientationManager(this);
 
+        //get values from settings activity
+        startX = getIntent().getExtras().getInt("StartX");
+        startY = getIntent().getExtras().getInt("StartY");
+        endX = getIntent().getExtras().getInt("EndX");
+        endY = getIntent().getExtras().getInt("EndY");
+        mapFilename = getIntent().getExtras().getString("File");
+
         //read map from text file
         BufferedReader br = null;
         try {
@@ -156,35 +164,71 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
             //if(externalDirs.length > 1) {
             //br = new BufferedReader(new FileReader(externalDirs[1].getAbsolutePath() + "/mapopen.txt"));
             //} else {
-            br = new BufferedReader(new FileReader(Environment.getExternalStorageDirectory() + "/RescueRobotics/mapclear.txt"));
-            //}
+            br = new BufferedReader(new FileReader(Environment.getExternalStorageDirectory() + "/RescueRobotics/"+mapFilename));
+
+            //}r
             // Log.d("abr_debug", "here i am 3");
             String[] dimensions = br.readLine().split(",");
             int rows = Integer.parseInt(dimensions[0]);
             int cols = Integer.parseInt(dimensions[0]);
             // costs = new int[rows][cols];
             map = new double[rows][cols];
+            orig_map = new double[rows][cols];
             for (int i = 0; i < rows; i++) {
                 // String[] costsRow = br.readLine().split(",");
                 String[] mapRow = br.readLine().split(",");
                 for (int j = 0; j < cols; j++) {
                     // costs[i][j] = Integer.parseInt(costsRow[j]);
                     map[i][j] = Double.parseDouble(mapRow[j]);
+                    orig_map[i][j] = map[i][j];
                 }
             }
+            /*
             ghostWave gW = new ghostWave(map);
             aerType start = new aerType(4, 4, 0, 0.0);
             aerType finish = new aerType(12, 12, 0, 0.0);
             Log.d("abr_debug", "before spike wave");
             ArrayList<aerType> path = gW.spikeWave(start,finish);
             Log.d("abr_debug", "after spike wave");
+            */
+            // Spike wave algorithm for finding a path
+            // Initialize the Ghost Wave with a map
+            // Set the start and finish location
+            ghostWave gW1stPass = new ghostWave(map);
+            aerType start = new aerType(startX, startY, 0, 0.0);
+            aerType finish = new aerType(endX, endY, 0, 0.0);
+            ArrayList<aerType> path = gW1stPass.spikeWave(start,finish);
+
+            // Because the possibility of multiple spike waves colliding exists,
+            // it is necessary to make a map with the path from the first pass
+            // as the lowest cost locations.
+            for (int i = 0; i < map.length; i++) {
+                for (int j = 0; j < map[0].length; j++) {
+                    map[i][j] = 20.0;
+                }
+            }
+            for (int i = 0; i < path.size(); i++) {
+                map[path.get(i).getX()][path.get(i).getY()] = 1.0;
+            }
+
+            // Running the Ghost Wave algorithm a second time yields the best
+            // path for the start and finish locations on this map.
+            ghostWave gW2ndPass = new ghostWave(map);
+            path = gW2ndPass.spikeWave(start,finish);
+
+            for (int i = path.size()-1; i >= 0; i--) {
+                System.out.println ((path.get(i).getX()+1) + " " + (path.get(i).getY()+1));
+            }
+
             route = new int[path.size()][2];
 
             //for (int i = 0; i < path.size(); i++) { //path was traced from goal to start?
+            int index = 0;
             for (int i = path.size()-1; i >= 0; i--) {
                 Log.d ("abr_debug", "Path: " + path.get(i).getX() + " " + path.get(i).getY());
-                route[i][0] = path.get(i).getX();
-                route[i][1] = path.get(i).getY();
+                route[index][0] = path.get(i).getX();
+                route[index][1] = path.get(i).getY();
+                index++;
             }
 
             gridLocations = new Location[rows][cols];
@@ -213,7 +257,7 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
         currR = 0;
         currC = 0;
         // pixelGrid.setGridColors(costs, route, currR, currC);
-        pixelGrid.setMapColors(map, route, currR, currC);
+        pixelGrid.setMapColors(orig_map, route, currR, currC);
         pixelGrid.setId(View.generateViewId());
         RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(700, 700);
         pixelGrid.setLayoutParams(lp);
@@ -229,33 +273,40 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
         mLocationRequest.setFastestInterval(500);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
+        if(waypoints != null && waypoints.size()>1) {
+            waypoints.remove(0);
+            dest_loc = waypoints.get(0);
+        }
         //set up location listener
         mLocationListener = new LocationListener() {
             public void onLocationChanged(Location location) {
                 Log.i("test","loc changed");
                 curr_loc = location;
-                bearing = location.bearingTo(dest_loc);
-                distance = curr_loc.distanceTo(waypoints.get(0));
-                if(waypoints.size() == 1){
+                distance = curr_loc.distanceTo(dest_loc);
+                if(waypoints.size() <= 1){
                     pwm_speed = 1500;
                     pwm_steering = 1500;
                     ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
                     toneG.startTone(ToneGenerator.TONE_CDMA_ABBR_REORDER, 200);
                 }
-                else if (curr_loc.distanceTo(waypoints.get(0)) < 20) {
+
+                else if (curr_loc.distanceTo(waypoints.get(0)) < 10) {
                     waypoints.remove(0);
                     dest_loc = waypoints.get(0);
                     ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
                     toneG.startTone(ToneGenerator.TONE_CDMA_PIP, 200);
                 }
+                float temp_bearing = location.bearingTo(dest_loc);
+                if(temp_bearing < 0)
+                    temp_bearing += 360;
+                bearing = temp_bearing;
                 int[] gp = getClosestGridpt(curr_loc, gridLocations);
                 currRow = gp[0];
                 currCol = gp[1];
                 Log.i("test", "curr row:" + currRow);
                 Log.i("test", "curr col:" + currCol);
                 // pixelGrid.setGridColors(costs, route, currRow, currCol);
-                pixelGrid.setMapColors(map, route, currRow, currCol);
-                driveABR();
+                pixelGrid.setMapColors(orig_map, route, currRow, currCol);
                 if(autoMode) {
                     String mill_timestamp = System.currentTimeMillis()+"";
                     int[] destWaypoint = getClosestGridpt(dest_loc, gridLocations);
@@ -363,19 +414,17 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
 
                         File[] externalDirs = getExternalFilesDirs(null);
                         if(externalDirs.length > 1) {
-                            rrFile = new File(externalDirs[1].getAbsolutePath() + "/rescuerobotics/"+time);
+                            //rrFile = new File(externalDirs[1].getAbsolutePath() + "/rescuerobotics/"+time);
+                            rrFile = new File(Environment.getExternalStorageDirectory() + "/rescuerobotics/"+time);
                             if (!rrFile.exists()) {
                                 rrFile.mkdirs();
                             }
                         } else {
-                            rrFile = new File(externalDirs[0].getAbsolutePath() + "/rescuerobotics/"+time);
+                            //rrFile = new File(externalDirs[0].getAbsolutePath() + "/rescuerobotics/"+time);
+                            rrFile = new File(Environment.getExternalStorageDirectory() + "/rescuerobotics/"+time);
                             if (!rrFile.exists()) {
                                 rrFile.mkdirs();
                             }
-                        }
-                        //rrFile = new File(Environment.getExternalStorageDirectory() + "/RescueRobotics");
-                        if (!rrFile.exists()) {
-                            rrFile.mkdirs();
                         }
                         recordingFile = new File(rrFile, time+".csv");
                         recordingFile.createNewFile();
@@ -402,92 +451,10 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
 
     }
 
-    public void driveABR() {
-        final int forwardSpeed = 180;
-        final int turningSpeed = 50;
-
-        if (autoMode) {
-            if (curr_loc.distanceTo(dest_loc) > 7) { // follow compass
-                float bearingMod = bearing % 360;
-                float headingMod = heading % 360;
-
-                pwm_speed = 1500 + forwardSpeed;
-                if(!sameDir(bearingMod,headingMod)) {
-                    if (bearingMod >= headingMod) {
-                        if (bearingMod - headingMod <= 180)
-                            pwm_steering = 1500 + turningSpeed;
-                        else
-                            pwm_steering = 1500 - turningSpeed;
-                    } else {
-                        if (headingMod - bearingMod <= 180)
-                            pwm_steering = 1500 - turningSpeed;
-                        else
-                            pwm_steering = 1500 + turningSpeed;
-                    }
-                } else {
-                    pwm_steering = 1500;
-                }
-                pwm_pan = 1500;
-                pwm_tilt = 1500;
-                Log.d("abr_debug", "dest=");
-            }
-            Log.d("abr_debug", "AUTO speed=" + pwm_speed + " turn=" + pwm_steering);
-        }
-        else {
-            pwm_pan = 1500;
-            pwm_tilt = 1500;
-            pwm_speed = 1500;
-            pwm_steering = 1500;
-            Log.d("abr_debug", "R/C speed=" + pwm_speed + " turn=" + pwm_steering);
-
-        }
-    }
-
     //determine whether 2 directions are roughly pointing in the same direction, correcting for angle wraparound
     public boolean sameDir(float dir1, float dir2){
-        float dir = bearing%360;
-        float headingMod = heading%360;
-        //return (Math.abs((double) (headingMod - dir)) < 22.5 || Math.abs((double) (headingMod - dir)) > 337.5);
-        //return (Math.abs((double) (headingMod - dir)) < 2.5 || Math.abs((double) (headingMod - dir)) > 357.5);
-        return (Math.abs((double) (headingMod - dir)) < 5 || Math.abs((double) (headingMod - dir)) > 355);
-    }
-
-    public void onPreviewFrame(final byte[] arg0, Camera arg1) {
-
-        final int forwardSpeed = 180;
-        final int turningSpeed = 100;
-
-        if (autoMode) {
-            if (curr_loc.distanceTo(dest_loc) > 7) { // follow compass
-                float bearingMod = bearing % 360;
-                float headingMod = heading % 360;
-
-                pwm_speed = 1500 + forwardSpeed;
-                if (bearingMod >= headingMod) {
-                    if (bearingMod - headingMod <= 180)
-                        pwm_steering = 1500 + turningSpeed;
-                    else
-                        pwm_steering = 1500 - turningSpeed;
-                } else {
-                    if (headingMod - bearingMod <= 180)
-                        pwm_steering = 1500 - turningSpeed;
-                    else
-                        pwm_steering = 1500 + turningSpeed;
-                }
-                pwm_pan = 1500;
-                pwm_tilt = 1500;
-                Log.d("abr_debug", "dest=");
-            }
-            Log.d("abr_debug", "AUTO speed=" + pwm_speed + " turn=" + pwm_steering);
-        }
-        else {
-            pwm_pan = 1500;
-            pwm_tilt = 1500;
-            pwm_speed = 1500;
-            pwm_steering = 1500;
-            Log.d("abr_debug", "R/C speed=" + pwm_speed + " turn=" + pwm_steering);
-
-        }
+        return (Math.abs((double) (dir1 - dir2)) < 22.5 || Math.abs((double) (dir1 - dir2)) > 337.5);
+        //return (Math.abs((double) (dir1 - dir2)) < 45 || Math.abs((double) (dir1 - dir2)) > 315.5);
     }
 
     @Override
@@ -579,9 +546,16 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
                 Double degrees = (values[i] * 180) / Math.PI;
                 values[i] = degrees.floatValue();
             }
-            //Update the compass direction
-            heading = values[0] + 12;
-            heading = (heading * 5 + fixWraparound(values[0] + 12)) / 6; //add 12 to make up for declination in Irvine, average out from previous 2 for smoothness
+
+            //heading = (fixWraparound(values[0] - 12))%360;
+            if(sameDir(bearing,heading))
+                Log.i("test","same dir");
+            else
+                Log.i("test","not same dir");
+            float temp_heading = values[0];
+            if(temp_heading < 0)
+                temp_heading = temp_heading + 360;
+            heading = (heading * 5 + fixWraparound(temp_heading - 12)) / 6; //add 12 to make up for declination in Irvine, average out from previous 2 for smoothness
         }
     }
 
@@ -783,12 +757,20 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
 
     //revert any degree measurement back to the -179 to 180 degree scale
     public float fixWraparound(float deg) {
+        /*
         if (deg <= 180.0 && deg > -179.99)
             return deg;
         else if (deg > 180)
             return deg - 360;
         else
             return deg + 360;
+        */
+        if (deg > 360)
+            return deg % 360;
+        else if (deg < 0)
+            return deg + 360;
+        else
+            return deg;
     }
 
     protected IOIOLooper createIOIOLooper() {
@@ -826,6 +808,9 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
         }
 
         public void loop() throws ConnectionLostException, InterruptedException {
+
+            driveABR();
+
             if (pwm_speed > MAX_PWM) pwm_speed = MAX_PWM;
             else if (pwm_speed < MIN_PWM) pwm_speed = MIN_PWM;
 
@@ -848,6 +833,43 @@ public class IOIO extends IOIOActivity implements Callback, Camera.PreviewCallba
             Thread.sleep(20);
         }
 
+        public void driveABR() {
+            final int forwardSpeed = 180;
+            final int turningSpeed = 50;
+
+            if (autoMode) {
+                if (curr_loc.distanceTo(dest_loc) > 7) { // follow compass
+                    pwm_speed = 1500 + forwardSpeed;
+                    if(!sameDir(bearing,heading)) {
+                        if (bearing >= heading) {
+                            if (bearing - heading <= 180)
+                                pwm_steering = 1500 + turningSpeed;
+                            else
+                                pwm_steering = 1500 - turningSpeed;
+                        } else {
+                            if (heading - bearing <= 180)
+                                pwm_steering = 1500 - turningSpeed;
+                            else
+                                pwm_steering = 1500 + turningSpeed;
+                        }
+                    } else {
+                        pwm_steering = 1500;
+                    }
+                    pwm_pan = 1500;
+                    pwm_tilt = 1500;
+                    Log.d("abr_debug", "dest=");
+                }
+                Log.d("abr_debug", "AUTO speed=" + pwm_speed + " turn=" + pwm_steering);
+            }
+            else {
+                pwm_pan = 1500;
+                pwm_tilt = 1500;
+                pwm_speed = 1500;
+                pwm_steering = 1500;
+                Log.d("abr_debug", "R/C speed=" + pwm_speed + " turn=" + pwm_steering);
+
+            }
+        }
         public void disconnected() {
             runOnUiThread(new Runnable() {
                 public void run() {

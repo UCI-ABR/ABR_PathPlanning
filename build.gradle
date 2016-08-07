@@ -17,6 +17,8 @@ android {
     applicationId "abr.teleop.pathplanning"
     minSdkVersion 21
     targetSdkVersion 21
+    // Enabling multidex support.
+    multiDexEnabled true
   }
 }
 
@@ -27,6 +29,7 @@ dependencies {
   compile 'com.github.ytai.ioio:IOIOLibAndroidDevice:5.05'
   compile 'org.opencv:OpenCV-Android:3.1.0'
   compile 'com.google.android.gms:play-services:9.0.2'
+  compile 'com.android.support:multidex:1.0.0'
 }
 
 repositories {

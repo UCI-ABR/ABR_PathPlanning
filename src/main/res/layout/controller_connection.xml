@@ -2,19 +2,10 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#fffbd5" 
     android:focusable="true"
     android:focusableInTouchMode="true" >
 
     <requestFocus />
-
-    <ImageView
-        android:id="@+id/imageView1"
-        android:layout_width="@dimen/image_mode_size"
-        android:layout_height="@dimen/image_mode_size"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentTop="true"
-        android:src="@drawable/dialog_header_control" />
 
 	<LinearLayout
         android:layout_width="wrap_content"
@@ -35,41 +26,108 @@
 	            android:id="@+id/textView1"
 	            android:layout_width="wrap_content"
 	            android:layout_height="wrap_content"
-	            android:text="IP Address"
+	            android:text="Start X"
 	            android:textColor="#136755"
 				android:textSize="@dimen/connection_text_size" />
 	
 	        <EditText
-	            android:id="@+id/etxtIP"
+	            android:id="@+id/etxtStartX"
 	            android:layout_width="@dimen/edit_text_width"
 	            android:layout_height="@dimen/edit_text_height"
 	            android:layout_marginLeft="30dp"
 	            android:layout_marginRight="30dp"
 	            android:background="@drawable/control_edittext"
 	            android:gravity="center"
-	            android:maxLength="15"
-	            android:text="666.666.666.666"
+	            android:maxLength="2"
+	            android:text="1"
 	            android:textColor="#3fa992"
 				android:textSize="@dimen/connection_text_size" 
 	            android:singleLine="true" />
+
+			<TextView
+				android:id="@+id/textView2"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Start Y"
+				android:textColor="#136755"
+				android:textSize="@dimen/connection_text_size" />
+
+			<EditText
+				android:id="@+id/etxtStartY"
+				android:layout_width="@dimen/edit_text_width"
+				android:layout_height="@dimen/edit_text_height"
+				android:layout_marginLeft="30dp"
+				android:layout_marginRight="30dp"
+				android:background="@drawable/control_edittext"
+				android:gravity="center"
+				android:maxLength="2"
+				android:text="9"
+				android:textColor="#3fa992"
+				android:textSize="@dimen/connection_text_size"
+				android:singleLine="true" />
+
+			<TextView
+				android:id="@+id/textView3"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Start X"
+				android:textColor="#136755"
+				android:textSize="@dimen/connection_text_size" />
+
+			<EditText
+				android:id="@+id/etxtEndX"
+				android:layout_width="@dimen/edit_text_width"
+				android:layout_height="@dimen/edit_text_height"
+				android:layout_marginLeft="30dp"
+				android:layout_marginRight="30dp"
+				android:background="@drawable/control_edittext"
+				android:gravity="center"
+				android:maxLength="2"
+				android:text="18"
+				android:textColor="#3fa992"
+				android:textSize="@dimen/connection_text_size"
+				android:singleLine="true" />
+
+			<TextView
+				android:id="@+id/textView4"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Start Y"
+				android:textColor="#136755"
+				android:textSize="@dimen/connection_text_size" />
+
+			<EditText
+				android:id="@+id/etxtEndY"
+				android:layout_width="@dimen/edit_text_width"
+				android:layout_height="@dimen/edit_text_height"
+				android:layout_marginLeft="30dp"
+				android:layout_marginRight="30dp"
+				android:background="@drawable/control_edittext"
+				android:gravity="center"
+				android:maxLength="2"
+				android:text="9"
+				android:textColor="#3fa992"
+				android:textSize="@dimen/connection_text_size"
+				android:singleLine="true" />
 	
 	        <TextView
-	            android:id="@+id/textView1"
+	            android:id="@+id/textView5"
 	            android:layout_width="wrap_content"
 	            android:layout_height="wrap_content"
 	            android:layout_marginTop="@dimen/edit_text_margin_top"
-	            android:text="Target Password"
+	            android:text="Map File"
 	            android:textColor="#136755"
 	            android:textSize="@dimen/connection_text_size" />
 	
 	        <EditText
-	            android:id="@+id/etxtPass"
+	            android:id="@+id/etxtFile"
 	            android:layout_width="@dimen/edit_text_width"
 	            android:layout_height="@dimen/edit_text_height"
 	            android:background="@drawable/control_edittext"
 	            android:gravity="center"
-	            android:maxLength="10"
+	            android:maxLength="30"
 	            android:textColor="#3fa992"
+				android:text="map_open_nopath.txt"
 	            android:textSize="@dimen/connection_text_size"
 	            android:singleLine="true" />
 
@@ -79,7 +137,7 @@
 	        android:id="@+id/buttonConnect"
 	        android:layout_width="@dimen/login_button_size"
 	        android:layout_height="@dimen/login_button_size"
-	        android:background="@drawable/button_login" />
+	        android:background="@drawable/button_start" />
     
 	</LinearLayout>
     

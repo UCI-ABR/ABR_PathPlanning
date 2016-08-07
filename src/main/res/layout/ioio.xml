@@ -43,7 +43,7 @@
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
 			android:textColor = "#FFF"
-			android:paddingLeft="50dp"
+			android:paddingLeft="10dp"
 			android:text="@string/sonar2" />
 
 		<TextView
@@ -51,7 +51,7 @@
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
 			android:textColor = "#FFF"
-			android:paddingLeft="200dp"
+			android:paddingLeft="10dp"
 			android:text="@string/sonar2" />
 
 		<TextView
@@ -59,23 +59,8 @@
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
 			android:textColor = "#FFF"
-			android:paddingLeft="350dp"
+			android:paddingLeft="10dp"
 			android:text="@string/sonar2" />
-        <TextView
-            android:id="@+id/txtIP"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="0.0.0.0"
-            android:textColor="#ca2559"
-            android:textSize="@dimen/data_text_size" />
-
-	    <TextView
-	        android:id="@+id/txtSpeed"
-	        android:layout_width="wrap_content"
-	        android:layout_height="wrap_content"
-	        android:text="Speed 0"
-	        android:textColor="#ca2559"
-	        android:textSize="@dimen/data_text_size" />
 
         <ImageView
             android:id="@+id/imagePreview"

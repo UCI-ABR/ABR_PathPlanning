@@ -25,12 +25,14 @@
         <uses-library 
             android:name="com.android.future.usb.accessory" 
             android:required="false" />
-        <activity android:name="IOIO"
+        <activity android:name="Settings"
             android:screenOrientation="landscape">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>/
         </activity>
+        <activity android:name="IOIO"
+            android:screenOrientation="landscape" />
     </application>
 </manifest>

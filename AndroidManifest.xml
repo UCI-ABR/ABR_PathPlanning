@@ -42,7 +42,7 @@
         </activity>
         <activity android:name="Controller" 
             android:screenOrientation="landscape" />
-        <activity android:name="ControllerConnection" 
+        <activity android:name=".Settings"
             android:screenOrientation="landscape" />
         <activity android:name="IOIO" 
             android:screenOrientation="landscape" />
