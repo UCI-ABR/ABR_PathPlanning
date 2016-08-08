@@ -70,7 +70,7 @@
 				android:id="@+id/textView3"
 				android:layout_width="wrap_content"
 				android:layout_height="wrap_content"
-				android:text="Start X"
+				android:text="End X"
 				android:textColor="#136755"
 				android:textSize="@dimen/connection_text_size" />
 
@@ -92,7 +92,7 @@
 				android:id="@+id/textView4"
 				android:layout_width="wrap_content"
 				android:layout_height="wrap_content"
-				android:text="Start Y"
+				android:text="End Y"
 				android:textColor="#136755"
 				android:textSize="@dimen/connection_text_size" />
 
