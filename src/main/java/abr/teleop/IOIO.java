@@ -290,7 +290,7 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
                     toneG.startTone(ToneGenerator.TONE_CDMA_ABBR_REORDER, 200);
                 }
 
-                else if (curr_loc.distanceTo(waypoints.get(0)) < 10) {
+                else if (autoMode && curr_loc.distanceTo(waypoints.get(0)) < 10) {
                     waypoints.remove(0);
                     dest_loc = waypoints.get(0);
                     ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
