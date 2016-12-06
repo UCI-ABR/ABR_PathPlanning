@@ -2,7 +2,7 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#fffbd5" 
+    android:background="#fffbd5"
     android:focusable="true"
     android:focusableInTouchMode="true" >
 
@@ -22,7 +22,7 @@
 	    android:layout_centerHorizontal="true"
 	    android:layout_centerVertical="true"
 	    android:gravity="center" >
-	
+
 	    <LinearLayout
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
@@ -30,7 +30,7 @@
 	        android:focusableInTouchMode="true"
 	        android:gravity="center"
 	        android:orientation="vertical" >
-	
+
 	        <TextView
 	            android:id="@+id/textView1"
 	            android:layout_width="wrap_content"
@@ -38,7 +38,7 @@
 	            android:text="IP Address"
 	            android:textColor="#136755"
 				android:textSize="@dimen/connection_text_size" />
-	
+
 	        <EditText
 	            android:id="@+id/etxtIP"
 	            android:layout_width="@dimen/edit_text_width"
@@ -50,9 +50,9 @@
 	            android:maxLength="15"
 	            android:text="666.666.666.666"
 	            android:textColor="#3fa992"
-				android:textSize="@dimen/connection_text_size" 
+				android:textSize="@dimen/connection_text_size"
 	            android:singleLine="true" />
-	
+
 	        <TextView
 	            android:id="@+id/textView1"
 	            android:layout_width="wrap_content"
@@ -61,7 +61,7 @@
 	            android:text="Target Password"
 	            android:textColor="#136755"
 	            android:textSize="@dimen/connection_text_size" />
-	
+
 	        <EditText
 	            android:id="@+id/etxtPass"
 	            android:layout_width="@dimen/edit_text_width"
@@ -74,14 +74,14 @@
 	            android:singleLine="true" />
 
 	    </LinearLayout>
-	    
+
 	    <Button
 	        android:id="@+id/buttonConnect"
 	        android:layout_width="@dimen/login_button_size"
 	        android:layout_height="@dimen/login_button_size"
 	        android:background="@drawable/button_login" />
-    
+
 	</LinearLayout>
-    
+
 
 </RelativeLayout>

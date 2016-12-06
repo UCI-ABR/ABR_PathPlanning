@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
+import android.graphics.Point;
 import android.hardware.Camera;
 import android.hardware.GeomagneticField;
 import android.hardware.Sensor;
@@ -41,6 +42,16 @@ import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.Scalar;
+import org.opencv.core.CvType;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -57,15 +68,17 @@ import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
 
-public class IOIO extends IOIOActivity implements Callback, SensorEventListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class IOIO extends IOIOActivity implements SensorEventListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener,CameraBridgeViewBase.CvCameraViewListener2 {
 
     static final int DEFAULT_PWM = 1500, MAX_PWM = 2000, MIN_PWM = 1000;
     private static final String TAG_IOIO = "CameraRobot-IOIO";
     private static final String TAG_CAMERA = "CameraRobot-Camera";
+    private static final String TAG = "OCVSample::Activity";
 
     //navigation variables
     public float heading = 0;
     public float bearing = 0;
+    float headBearDiff;
     //grid variables
     public boolean gridMode = true;
     public boolean autoMode = false;
@@ -77,9 +90,6 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
     int speed_motor = 0;
     int pwm_pan, pwm_tilt;
     int pwm_speed, pwm_steering;
-    Camera mCamera;
-    Camera.Parameters params;
-    SurfaceView mPreview;
     int startTime = 0;
     OrientationEventListener oel;
     OrientationManager om;
@@ -126,6 +136,68 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
     int endX;
     int endY;
     String mapFilename;
+    boolean roadFollow;
+    double[][] roadLocations;
+    //variables and setup for opencv
+    //blob detection variables
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private Mat mRgba;
+    private Scalar mBlobColorRgba;
+    private ColorBlobDetector mDetector;
+    private Mat mSpectrum;
+    private Scalar CONTOUR_COLOR;
+    static {
+        if (!OpenCVLoader.initDebug()) {
+            // Handle initialization error
+        }
+    }
+    //edge detection roadfollow
+    boolean edgeDetect;
+    String selectedCurrentDisplay;
+    int maxCounter;
+    double centerThreshDouble;
+    int sampleRate;
+    double blurSizeDouble;
+    Size blurSize;
+    double alpha, beta;
+    double thresh;
+    int dilateSize;
+    // (Added)
+    boolean sonarOn = false;
+    boolean redRobot; //account for different gear ratios
+    int forwardSpeed;
+    int roadForwardSpeed;
+    int turningSpeed;
+    int roadTurningSpeed;
+    int fwdSpeed;
+    int roadFwdSpeed;
+    int turnSpeed;
+    int roadTurnSpeed;
+    int frameCounter;
+    List<Point> mPathPtsPrev;
+    int momentXPrev;
+    int centerXPrev;
+    Mat mGrayImagePrev;
+    Mat mContrastImagePrev;
+    Mat mGradientImagePrev;
+    Mat mBinaryImagePrev;
+    Mat mDilatedMaskPrev;
+
+    //road detection variables
+    private RoadDetector mRoadDetector;
+    private Mat mGrayImage; // added
+    private Mat mContrastImage; // added
+    private Mat mGradientImage; // added
+    private Mat mBinaryImage; // added
+    private Mat mDilatedMask; // added
+    private Mat currentImage; // added
+    private double[] PATH_COLOR;
+    private List<Point> mPathPts;
+    private int momentX;
+    private int centerX;
+    private int centerThreshold;
+    private int c;
+    private int r;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -135,17 +207,10 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         setContentView(R.layout.ioio);
 
-        mPreview = (SurfaceView) findViewById(R.id.preview);
-        mPreview.getHolder().addCallback(this);
-        mPreview.getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-
-        layoutPreview = (RelativeLayout) findViewById(R.id.layoutPreview);
-        layoutPreview.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                if (mCamera != null)
-                    mCamera.autoFocus(null);
-            }
-        });
+        //set up opencv camera
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.color_blob_detection_activity_surface_view);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+        mOpenCvCameraView.enableView();
 
         om = new OrientationManager(this);
 
@@ -155,6 +220,37 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
         endX = getIntent().getExtras().getInt("EndX");
         endY = getIntent().getExtras().getInt("EndY");
         mapFilename = getIntent().getExtras().getString("File");
+        redRobot = getIntent().getExtras().getBoolean("redRobot");
+        roadFollow = getIntent().getExtras().getBoolean("roadFollow");
+        edgeDetect = getIntent().getExtras().getBoolean("edgeDetect");
+        headBearDiff = getIntent().getExtras().getFloat("HeadBearDiff");
+        fwdSpeed = getIntent().getExtras().getInt("FwdSpeed");
+        roadFwdSpeed = getIntent().getExtras().getInt("RoadFwdSpeed");
+        turnSpeed = getIntent().getExtras().getInt("TurnSpeed");
+        roadTurnSpeed = getIntent().getExtras().getInt("RoadTurnSpeed");
+        selectedCurrentDisplay = getIntent().getExtras().getString("selectedCurrentDisplay");
+        maxCounter = getIntent().getExtras().getInt("MaxCounter");
+        centerThreshDouble = getIntent().getExtras().getDouble("CenterThresh");
+        sampleRate = getIntent().getExtras().getInt("SampleRate");
+        blurSizeDouble = getIntent().getExtras().getDouble("BlurSize");
+        blurSize = new Size(blurSizeDouble, blurSizeDouble);
+        alpha = getIntent().getExtras().getDouble("Alpha");
+        beta = getIntent().getExtras().getDouble("Beta");
+        thresh = getIntent().getExtras().getDouble("BinaryThresh");
+        dilateSize = getIntent().getExtras().getInt("DilateSize");
+
+        // set speed
+        if (redRobot) {
+            forwardSpeed = fwdSpeed; //220;
+            roadForwardSpeed = roadFwdSpeed; //180;
+            turningSpeed = turnSpeed; //50;
+            roadTurningSpeed = roadTurnSpeed; //120;//100;
+        } else {
+            forwardSpeed = fwdSpeed; //110;
+            roadForwardSpeed = roadFwdSpeed; //85;//110;
+            turningSpeed = turnSpeed; //30;
+            roadTurningSpeed = roadTurnSpeed; //60;//80;
+        }
 
         //read map from text file
         BufferedReader br = null;
@@ -246,6 +342,21 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
                 waypoints.add(gridLocations[route[i][0]][route[i][1]]);
             }
             dest_loc = waypoints.get(0);
+            if(roadFollow){
+                br = new BufferedReader(new FileReader(Environment.getExternalStorageDirectory() + "/RescueRobotics/map_open_path_locations.txt"));
+                dimensions = br.readLine().split(",");
+                rows = Integer.parseInt(dimensions[0]);
+                cols = Integer.parseInt(dimensions[0]);
+                roadLocations = new double[rows][cols];
+                for (int i = 0; i < rows; i++) {
+                    // String[] costsRow = br.readLine().split(",");
+                    String[] mapRow = br.readLine().split(",");
+                    for (int j = 0; j < cols; j++) {
+                        // costs[i][j] = Integer.parseInt(costsRow[j]);
+                        roadLocations[i][j] = Double.parseDouble(mapRow[j]);
+                    }
+                }
+            }
 
         } catch (IOException e) {
             Log.e(TAG_IOIO, e.getMessage());
@@ -451,6 +562,181 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
 
     }
 
+    //Called when camera view starts. change bucket color here
+    public void onCameraViewStarted(int width, int height) {
+        mRgba = new Mat(height, width, CvType.CV_8UC4);
+        mDetector = new ColorBlobDetector();
+        mSpectrum = new Mat();
+        mBlobColorRgba = new Scalar(255);
+        CONTOUR_COLOR = new Scalar(255, 0, 0, 255);
+
+        //To set color, find HSV values of desired color and convert each value to 1-255 scale
+        mDetector.setColorRadius(new Scalar(30,75,175,0)); //always set radius before changing colors
+        mDetector.setHsvColor(new Scalar(55,110,220)); //medium aldrich green
+
+        //edge detect
+        mGrayImage = new Mat(height, width, CvType.CV_8UC1); // added
+        mContrastImage = new Mat(height, width, CvType.CV_8UC1); // added
+        mGradientImage = new Mat(height, width, CvType.CV_8UC1); // added
+        mBinaryImage = new Mat(height, width, CvType.CV_8UC1); // added
+        mDilatedMask = new Mat(height, width, CvType.CV_8UC1); // added
+        currentImage = new Mat(); // added
+        mRoadDetector = new RoadDetector();
+        PATH_COLOR = new double[]{255, 0, 0, 255};
+        mPathPts = new ArrayList<>();
+        momentX = 0;//Added
+        centerX = width / 2; //Added
+        centerThreshold = 0; //Added
+        c = 1;
+        r = 1;
+        //Added
+        frameCounter = 0;
+        mPathPtsPrev = new ArrayList<>();
+        momentXPrev = momentX;
+        centerXPrev = centerX;
+        mGrayImagePrev = mGrayImage;
+        mContrastImagePrev = mContrastImage;
+        mGradientImagePrev = mGradientImage;
+        mBinaryImagePrev = mBinaryImage;
+        mDilatedMaskPrev = mDilatedMask;
+    }
+
+    //Called when camera view stops
+    public void onCameraViewStopped() {
+        mRgba.release();
+        mGrayImage.release();
+        mContrastImage.release();
+        mGradientImage.release();
+        mBinaryImage.release();
+        mDilatedMask.release();
+        currentImage.release();
+    }
+
+    //Called at every camera frame. Main controls of the robot movements are in this function
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        mRgba = inputFrame.rgba();
+
+        if(edgeDetect){
+            if (frameCounter == 0) {
+                mRoadDetector.process(mRgba, sampleRate, blurSize, alpha, beta, thresh, dilateSize);
+                mPathPts = mRoadDetector.getPathPoints();
+                mPathPtsPrev = mPathPts;
+                momentX = mRoadDetector.getMomentX();
+                centerX = mRoadDetector.getCenterX();
+                momentXPrev = momentX;
+                centerXPrev = centerX;
+                mGrayImage = mRoadDetector.getGrayImage();
+                mContrastImage = mRoadDetector.getContrastImage();
+                mGradientImage = mRoadDetector.getGradientImage();
+                mBinaryImage = mRoadDetector.getBinaryImage();
+                mDilatedMask = mRoadDetector.getDilatedMask();
+                mGrayImagePrev = mGrayImage;
+                mContrastImagePrev = mContrastImage;
+                mGradientImagePrev = mGradientImage;
+                mBinaryImagePrev = mBinaryImage;
+                mDilatedMaskPrev = mDilatedMask;
+            } else {
+                mPathPts = mPathPtsPrev;
+                momentX = momentXPrev;
+                centerX = centerXPrev;
+                mBinaryImage = mBinaryImagePrev;
+                mDilatedMask = mDilatedMaskPrev;
+            }
+            centerThreshold = (int) (centerThreshDouble * centerX);
+
+            Log.e(TAG, "Paths count: " + mPathPts.size());
+            Log.e(TAG, "frameCounter: " + frameCounter);
+
+            if (selectedCurrentDisplay.equals("mGrayImage")) {
+                currentImage = mGrayImage;
+            } else if (selectedCurrentDisplay.equals("mContrastImage")) {
+                currentImage = mContrastImage;
+            } else if (selectedCurrentDisplay.equals("mGradientImage")) {
+                currentImage = mGradientImage;
+            } else if (selectedCurrentDisplay.equals("mBinaryImage")) {
+                currentImage = mBinaryImage;
+            } else if (selectedCurrentDisplay.equals("mDilatedMask")) {
+                currentImage = mDilatedMask;
+            } else {
+                currentImage = mRgba;
+            }
+
+            if (currentImage.channels() == 4) {
+                for (Point mPathPt : mPathPts) {
+                    currentImage.put(mPathPt.y, mPathPt.x, PATH_COLOR);
+                    c = 1;
+                    while (c < 6 && mPathPt.x - c > 0) {
+                        currentImage.put(mPathPt.y, mPathPt.x - c, PATH_COLOR);
+                        c++;
+                    }
+                    c = 1;
+                    while (c < 6 && mPathPt.x + c < mRgba.cols()) {
+                        currentImage.put(mPathPt.y, mPathPt.x + c, PATH_COLOR);
+                        c++;
+                    }
+                    r = 1;
+                    while (r < 6 && mPathPt.y - r > 0) {
+                        currentImage.put(mPathPt.y - r, mPathPt.x, PATH_COLOR);
+                        r++;
+                    }
+                    r = 1;
+                    while (r < 6 && mPathPt.y + r < mRgba.rows()) {
+                        currentImage.put(mPathPt.y + r, mPathPt.x, PATH_COLOR);
+                        r++;
+                    }
+                }
+            } else  {
+                PATH_COLOR = new double[]{255};
+                for (Point mPathPt : mPathPts) {
+                    currentImage.put(mPathPt.y, mPathPt.x, PATH_COLOR);
+                    c = 1;
+                    while (c < 6 && mPathPt.x - c > 0) {
+                        currentImage.put(mPathPt.y, mPathPt.x - c, PATH_COLOR);
+                        c++;
+                    }
+                    c = 1;
+                    while (c < 6 && mPathPt.x + c < mRgba.cols()) {
+                        currentImage.put(mPathPt.y, mPathPt.x + c, PATH_COLOR);
+                        c++;
+                    }
+                    r = 1;
+                    while (r < 6 && mPathPt.y - r > 0) {
+                        currentImage.put(mPathPt.y - r, mPathPt.x, PATH_COLOR);
+                        r++;
+                    }
+                    r = 1;
+                    while (r < 6 && mPathPt.y + r < mRgba.rows()) {
+                        currentImage.put(mPathPt.y + r, mPathPt.x, PATH_COLOR);
+                        r++;
+                    }
+                }
+            }
+
+            frameCounter++;
+            if (frameCounter > maxCounter) {
+                frameCounter = 0;
+            }
+
+            return currentImage;
+        } else {
+            mDetector.process(mRgba);
+
+            List<MatOfPoint> contours = mDetector.getContours();
+            // Log.e("rescue robotics", "Contours count: " + contours.size());
+            Imgproc.drawContours(mRgba, contours, -1, CONTOUR_COLOR);
+
+            Mat colorLabel = mRgba.submat(4, 68, 4, 68);
+            colorLabel.setTo(mBlobColorRgba);
+
+            Mat spectrumLabel = mRgba.submat(4, 4 + mSpectrum.rows(), 70, 70 + mSpectrum.cols());
+            mSpectrum.copyTo(spectrumLabel);
+
+            frameCounter = 0;
+            return mRgba;
+        }
+
+    }
+
     //determine whether 2 directions are roughly pointing in the same direction, correcting for angle wraparound
     public boolean sameDir(float dir1, float dir2){
         return (Math.abs((double) (dir1 - dir2)) < 22.5 || Math.abs((double) (dir1 - dir2)) > 337.5);
@@ -591,127 +877,6 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
         });
     }
 
-    public void surfaceChanged(SurfaceHolder arg0, int arg1, int arg2, int arg3) {
-        if (mPreview == null)
-            return;
-
-        try {
-            mCamera.stopPreview();
-        } catch (Exception e) {
-        }
-
-        size = 10; //hack
-
-        params = mCamera.getParameters();
-        Camera.Size pictureSize = getMaxPictureSize(params);
-        Camera.Size previewSize = params.getSupportedPreviewSizes().get(size);
-
-        params.setPictureSize(pictureSize.width, pictureSize.height);
-        params.setPreviewSize(previewSize.width, previewSize.height);
-        params.setPreviewFrameRate(getMaxPreviewFps(params));
-
-        Display display = getWindowManager().getDefaultDisplay();
-        LayoutParams lp = layoutPreview.getLayoutParams();
-
-        if (om.getOrientation() == OrientationManager.LANDSCAPE_NORMAL
-                || om.getOrientation() == OrientationManager.LANDSCAPE_REVERSE) {
-            float ratio = (float) previewSize.width / (float) previewSize.height;
-            if ((int) ((float) mPreview.getWidth() / ratio) >= display.getHeight()) {
-                lp.height = (int) ((float) mPreview.getWidth() / ratio);
-                lp.width = mPreview.getWidth();
-            } else {
-                lp.height = mPreview.getHeight();
-                lp.width = (int) ((float) mPreview.getHeight() * ratio);
-            }
-        } else if (om.getOrientation() == OrientationManager.PORTRAIT_NORMAL
-                || om.getOrientation() == OrientationManager.PORTRAIT_REVERSE) {
-            float ratio = (float) previewSize.height / (float) previewSize.width;
-            if ((int) ((float) mPreview.getWidth() / ratio) >= display.getHeight()) {
-                lp.height = (int) ((float) mPreview.getWidth() / ratio);
-                lp.width = mPreview.getWidth();
-            } else {
-                lp.height = mPreview.getHeight();
-                lp.width = (int) ((float) mPreview.getHeight() * ratio);
-            }
-        }
-
-        layoutPreview.setLayoutParams(lp);
-        int deslocationX = (int) (lp.width / 2.0 - mPreview.getWidth() / 2.0);
-        layoutPreview.animate().translationX(-deslocationX);
-
-        params.setJpegQuality(100);
-        mCamera.setParameters(params);
-
-        switch (om.getOrientation()) {
-            case OrientationManager.LANDSCAPE_NORMAL:
-                mCamera.setDisplayOrientation(0);
-                break;
-            case OrientationManager.PORTRAIT_NORMAL:
-                mCamera.setDisplayOrientation(90);
-                break;
-            case OrientationManager.LANDSCAPE_REVERSE:
-                mCamera.setDisplayOrientation(180);
-                break;
-            case OrientationManager.PORTRAIT_REVERSE:
-                mCamera.setDisplayOrientation(270);
-                break;
-        }
-
-        try {
-            mCamera.setPreviewDisplay(mPreview.getHolder());
-            mCamera.startPreview();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void surfaceCreated(SurfaceHolder arg0) {
-        try {
-            mCamera = Camera.open(0);
-            mCamera.setPreviewDisplay(arg0);
-            mCamera.startPreview();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void surfaceDestroyed(SurfaceHolder arg0) {
-        mCamera.setPreviewCallback(null);
-        mCamera.stopPreview();
-        mCamera.release();
-        mCamera = null;
-    }
-
-    public void decodeYUV420(int[] rgb, byte[] yuv420, int width, int height) {
-        final int frameSize = width * height;
-
-        for (int j = 0, yp = 0; j < height; j++) {
-            int uvp = frameSize + (j >> 1) * width, u = 0, v = 0;
-            for (int i = 0; i < width; i++, yp++) {
-                int y = (0xff & ((int) yuv420[yp])) - 16;
-                if (y < 0) y = 0;
-                if ((i & 1) == 0) {
-                    v = (0xff & yuv420[uvp++]) - 128;
-                    u = (0xff & yuv420[uvp++]) - 128;
-                }
-
-                int y1192 = 1192 * y;
-                int r = (y1192 + 1634 * v);
-                int g = (y1192 - 833 * v - 400 * u);
-                int b = (y1192 + 2066 * u);
-
-                if (r < 0) r = 0;
-                else if (r > 262143) r = 262143;
-                if (g < 0) g = 0;
-                else if (g > 262143) g = 262143;
-                if (b < 0) b = 0;
-                else if (b > 262143) b = 262143;
-
-                rgb[yp] = 0xff000000 | ((r << 6) & 0xff0000) | ((g >> 2) & 0xff00) | ((b >> 10) & 0xff);
-            }
-        }
-    }
-
     public int[] getClosestGridpt(Location curr, Location[][] locs) {
         int[] closestLoc = {0, 0};
         double dist = curr.distanceTo(gridLocations[0][0]);
@@ -834,11 +999,42 @@ public class IOIO extends IOIOActivity implements Callback, SensorEventListener,
         }
 
         public void driveABR() {
-            final int forwardSpeed = 180;
-            final int turningSpeed = 50;
-
             if (autoMode) {
-                if (curr_loc.distanceTo(dest_loc) > 7) { // follow compass
+                int[] destGridpt = getClosestGridpt(dest_loc,gridLocations);
+                if(roadFollow && (roadLocations[destGridpt[0]][destGridpt[1]]==1) &&
+                        ((Math.abs(heading-bearing) < headBearDiff)||(Math.abs(heading-bearing) > (360f-headBearDiff)))){
+                    Log.i("hahaha","road following");
+                    if(edgeDetect){
+                        pwm_tilt = 1750;//1630;
+                        if (momentX > centerThreshold) { // path is to the right of screen
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500 + roadTurningSpeed;
+                        } else if (momentX < -centerThreshold) { // path is to the left of screen
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500 - roadTurningSpeed;
+                        } else { // in any other case, just going forward
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500;
+                        }
+                    } else {
+                        pwm_tilt = 1750;//1630;
+                        double leftRoadBorder = mDetector.getLeftRoadBorder();
+                        double rightRoadBorder = mDetector.getRightRoadBorder();
+                        double centerX = mDetector.getCenterX();
+
+                        if (Math.abs(leftRoadBorder) > Math.abs(rightRoadBorder)) {
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500 - roadTurningSpeed;
+                        } else if (Math.abs(rightRoadBorder) > Math.abs(leftRoadBorder)) {
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500 + roadTurningSpeed;
+                        } else {
+                            pwm_speed = 1500 + roadForwardSpeed;
+                            pwm_steering = 1500;
+                        }
+                    }
+                }
+                else if (curr_loc.distanceTo(dest_loc) > 7) { // follow compass
                     pwm_speed = 1500 + forwardSpeed;
                     if(!sameDir(bearing,heading)) {
                         if (bearing >= heading) {
