@@ -717,6 +717,8 @@ public class IOIO extends IOIOActivity implements SensorEventListener, GoogleApi
                 frameCounter = 0;
             }
 
+            mDetector.process(mRgba);
+
             return currentImage;
         } else {
             mDetector.process(mRgba);
@@ -1005,8 +1007,21 @@ public class IOIO extends IOIOActivity implements SensorEventListener, GoogleApi
                         ((Math.abs(heading-bearing) < headBearDiff)||(Math.abs(heading-bearing) > (360f-headBearDiff)))){
                     Log.i("hahaha","road following");
                     if(edgeDetect){
-                        pwm_tilt = 1750;//1630;
-                        if (momentX > centerThreshold) { // path is to the right of screen
+                        pwm_tilt = 1650;//1630;
+                        if(mDetector.getMaxArea() > (.5 * 2 * mDetector.getCenterX() * 2 * mDetector.getCenterY())){
+                            if (bearing >= heading) {
+                                if (bearing - heading <= 180)
+                                    pwm_steering = 1500 + turningSpeed;
+                                else
+                                    pwm_steering = 1500 - turningSpeed;
+                            } else {
+                                if (heading - bearing <= 180)
+                                    pwm_steering = 1500 - turningSpeed;
+                                else
+                                    pwm_steering = 1500 + turningSpeed;
+                            }
+                        }
+                        else if (momentX > centerThreshold) { // path is to the right of screen
                             pwm_speed = 1500 + roadForwardSpeed;
                             pwm_steering = 1500 + roadTurningSpeed;
                         } else if (momentX < -centerThreshold) { // path is to the left of screen
@@ -1017,7 +1032,7 @@ public class IOIO extends IOIOActivity implements SensorEventListener, GoogleApi
                             pwm_steering = 1500;
                         }
                     } else {
-                        pwm_tilt = 1750;//1630;
+                        pwm_tilt = 1650;//1630;
                         double leftRoadBorder = mDetector.getLeftRoadBorder();
                         double rightRoadBorder = mDetector.getRightRoadBorder();
                         double centerX = mDetector.getCenterX();
